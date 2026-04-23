@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CaptionAI — Instagram Caption Generator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@300;400&display=swap"
+        rel="stylesheet" />
+
+    <style>
+        /* ── Reset & Variables ─────────────────────────────────────────────────── */
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg: #0c0c0e;
+            --surface: #13131a;
+            --border: #2a2a38;
+            --accent: #c8a96e;
+            /* warm gold */
+            --accent2: #7f6fdf;
+            /* violet */
+            --text: #e8e4dc;
+            --muted: #6b6878;
+            --font-head: 'Playfair Display', Georgia, serif;
+            --font-mono: 'DM Mono', 'Courier New', monospace;
+            --radius: 6px;
+            --trans: 220ms cubic-bezier(.4, 0, .2, 1);
+        }
+
+        html {
+            font-size: 16px;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--font-mono);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 60px 24px 80px;
+        }
+
+        /* ── Noise texture overlay ─────────────────────────────────────────────── */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 0;
+            opacity: .5;
+        }
+
+        /* ── Layout ────────────────────────────────────────────────────────────── */
+        .container {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 1920px;
+        }
+
+        /* ── Header ────────────────────────────────────────────────────────────── */
+        header {
+            margin-bottom: 52px;
+            text-align: left;
+        }
+
+        .eyebrow {
+            font-family: var(--font-mono);
+            font-size: .7rem;
+            letter-spacing: .2em;
+            text-transform: uppercase;
+            color: var(--accent);
+            margin-bottom: 12px;
+            opacity: 0;
+            animation: fadeUp .6s .1s forwards;
+        }
+
+        h1 {
+            font-family: var(--font-head);
+            font-size: clamp(2rem, 5vw, 3rem);
+            font-weight: 700;
+            line-height: 1.1;
+            letter-spacing: -.02em;
+            opacity: 0;
+            animation: fadeUp .6s .2s forwards;
+        }
+
+        h1 em {
+            font-style: italic;
+            color: var(--accent);
+        }
+
+        .subtitle {
+            margin-top: 14px;
+            font-size: .78rem;
+            color: var(--muted);
+            letter-spacing: .03em;
+            opacity: 0;
+            animation: fadeUp .6s .3s forwards;
+        }
+
+        /* ── Decorative rule ───────────────────────────────────────────────────── */
+        .rule {
+            width: 40px;
+            height: 2px;
+            background: linear-gradient(90deg, var(--accent), transparent);
+            margin: 20px 0 0;
+            opacity: 0;
+            animation: fadeUp .6s .35s forwards;
+        }
+
+        /* ── Card ──────────────────────────────────────────────────────────────── */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 36px 32px 32px;
+            opacity: 0;
+            animation: fadeUp .6s .45s forwards;
+        }
+
+        /* ── Form fields ───────────────────────────────────────────────────────── */
+        .field {
+            margin-bottom: 24px;
+        }
+
+        label {
+            display: block;
+            font-size: .65rem;
+            letter-spacing: .18em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 10px;
+        }
+
+        select,
+        input[type="text"] {
+            width: 100%;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text);
+            font-family: var(--font-mono);
+            font-size: .88rem;
+            padding: 12px 16px;
+            outline: none;
+            transition: border-color var(--trans), box-shadow var(--trans);
+            appearance: none;
+            -webkit-appearance: none;
+        }
+
+        /* Custom arrow for select */
+        .select-wrap {
+            position: relative;
+        }
+
+        .select-wrap::after {
+            content: '▾';
+            position: absolute;
+            right: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--muted);
+            pointer-events: none;
+            font-size: .8rem;
+        }
+
+        select:focus,
+        input[type="text"]:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(200, 169, 110, .12);
+        }
+
+        select option {
+            background: var(--surface);
+        }
+
+        input[type="text"]::placeholder {
+            color: var(--muted);
+            opacity: .6;
+        }
+
+        /* ── Button ────────────────────────────────────────────────────────────── */
+        .btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            padding: 14px 24px;
+            background: var(--accent);
+            color: var(--bg);
+            border: none;
+            border-radius: var(--radius);
+            font-family: var(--font-mono);
+            font-size: .82rem;
+            font-weight: 400;
+            letter-spacing: .12em;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: background var(--trans), transform var(--trans), opacity var(--trans);
+        }
+
+        .btn:hover:not(:disabled) {
+            background: #d4b87e;
+            transform: translateY(-1px);
+        }
+
+        .btn:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            opacity: .5;
+            cursor: not-allowed;
+        }
+
+        /* Spinner */
+        .spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(12, 12, 14, .3);
+            border-top-color: var(--bg);
+            border-radius: 50%;
+            animation: spin .7s linear infinite;
+            display: none;
+        }
+
+        .btn.loading .spinner {
+            display: block;
+        }
+
+        .btn.loading .btn-text {
+            display: none;
+        }
+
+        /* ── Output box ────────────────────────────────────────────────────────── */
+        .output-section {
+            margin-top: 28px;
+        }
+
+        .output-label {
+            font-size: .65rem;
+            letter-spacing: .18em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .output-label .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent2);
+            display: none;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        .output-label .dot.visible {
+            display: inline-block;
+        }
+
+        .output-box {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px 18px;
+            min-height: 80px;
+            font-family: var(--font-head);
+            font-size: 1.05rem;
+            line-height: 1.65;
+            color: var(--text);
+            white-space: pre-wrap;
+            word-break: break-word;
+            position: relative;
+            transition: border-color var(--trans);
+        }
+
+        .output-box.has-content {
+            border-color: rgba(200, 169, 110, .3);
+        }
+
+        .output-box .placeholder {
+            color: var(--muted);
+            font-family: var(--font-mono);
+            font-size: .8rem;
+            font-style: italic;
+            opacity: .5;
+        }
+
+        .output-box .caption-text {
+            display: none;
+        }
+
+        .output-box.has-content .placeholder {
+            display: none;
+        }
+
+        .output-box.has-content .caption-text {
+            display: block;
+        }
+
+        /* Copy button */
+        .copy-btn {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: none;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--muted);
+            font-family: var(--font-mono);
+            font-size: .6rem;
+            letter-spacing: .1em;
+            text-transform: uppercase;
+            padding: 4px 8px;
+            cursor: pointer;
+            display: none;
+            transition: color var(--trans), border-color var(--trans);
+        }
+
+        .copy-btn:hover {
+            color: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .output-box.has-content .copy-btn {
+            display: block;
+        }
+
+        /* Error state */
+        .error-msg {
+            margin-top: 12px;
+            font-size: .75rem;
+            color: #e07070;
+            letter-spacing: .05em;
+            display: none;
+        }
+
+        /* ── Footer ────────────────────────────────────────────────────────────── */
+        footer {
+            margin-top: 48px;
+            font-size: .65rem;
+            color: var(--muted);
+            opacity: .4;
+            letter-spacing: .08em;
+            text-align: center;
+        }
+
+        /* ── Animations ────────────────────────────────────────────────────────── */
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(14px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: .3;
+            }
+        }
+
+        @keyframes reveal {
+            from {
+                clip-path: inset(0 100% 0 0);
+                opacity: 0;
+            }
+
+            to {
+                clip-path: inset(0 0% 0 0);
+                opacity: 1;
+            }
+        }
+
+        .caption-text.animate {
+            animation: reveal .5s ease-out forwards;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+
+        <!-- Header -->
+        <header>
+            <p class="eyebrow">✦ AI-Powered</p>
+            <h1>Instagram <em>Caption</em><br>Generator</h1>
+            <p class="subtitle">Character-level LSTM · Trained locally · Zero cloud</p>
+            <div class="rule"></div>
+        </header>
+
+        <!-- Card -->
+        <div class="card">
+
+            <!-- Segment -->
+            <div class="field">
+                <label for="segment">Segment</label>
+                <div class="select-wrap">
+                    <select id="segment">
+                        <option value="Fitness">Fitness</option>
+                        <option value="Food">Food</option>
+                        <option value="Fashion">Fashion</option>
+                        <option value="Travel">Travel</option>
+                        <option value="RealEstate">Real Estate</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Description -->
+            <div class="field">
+                <label for="description">Description</label>
+                <input type="text" id="description" placeholder="e.g. New summer collection drop" maxlength="120"
+                    autocomplete="off" />
+            </div>
+
+            <!-- Generate button -->
+            <button class="btn" id="generateBtn" onclick="generateCaption()">
+                <span class="btn-text">Generate Caption</span>
+                <span class="spinner"></span>
+            </button>
+
+            <!-- Output -->
+            <div class="output-section">
+                <div class="output-label">
+                    <span>Output</span>
+                    <span class="dot" id="dot"></span>
+                </div>
+
+                <div class="output-box" id="outputBox">
+                    <span class="placeholder">Your caption will appear here…</span>
+                    <span class="caption-text" id="captionText"></span>
+                    <button class="copy-btn" id="copyBtn" onclick="copyCaption()">Copy</button>
+                </div>
+
+                <p class="error-msg" id="errorMsg"></p>
+            </div>
+
+        </div><!-- /card -->
+
+        <footer>Built with PyTorch · Flask · Vanilla JS</footer>
+    </div>
+
+    <script>
+        const btn = document.getElementById('generateBtn');
+        const outputBox = document.getElementById('outputBox');
+        const captionEl = document.getElementById('captionText');
+        const errorEl = document.getElementById('errorMsg');
+        const dot = document.getElementById('dot');
+        const copyBtn = document.getElementById('copyBtn');
+
+        // Allow Enter key in description field
+        document.getElementById('description').addEventListener('keydown', e => {
+            if (e.key === 'Enter') generateCaption();
+        });
+
+        async function generateCaption() {
+            const segment = document.getElementById('segment').value;
+            const description = document.getElementById('description').value.trim();
+
+            if (!description) {
+                showError('Please enter a description.');
+                return;
+            }
+
+            // UI: loading state
+            setLoading(true);
+            clearOutput();
+
+            try {
+                const res = await fetch('/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ segment, description }),
+                });
+
+                const data = await res.json();
+
+                if (!res.ok || data.error) {
+                    showError(data.error || 'Server error. Please try again.');
+                    return;
+                }
+
+                showCaption(data.caption);
+
+            } catch (err) {
+                showError('Network error — is the Flask server running?');
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        function setLoading(active) {
+            btn.disabled = active;
+            btn.classList.toggle('loading', active);
+            dot.classList.toggle('visible', active);
+        }
+
+        function clearOutput() {
+            outputBox.classList.remove('has-content');
+            captionEl.classList.remove('animate');
+            captionEl.textContent = '';
+            errorEl.style.display = 'none';
+            errorEl.textContent = '';
+        }
+
+        function showCaption(text) {
+            captionEl.textContent = text;
+            outputBox.classList.add('has-content');
+            dot.classList.remove('visible');
+
+            // Trigger animation
+            requestAnimationFrame(() => {
+                captionEl.classList.remove('animate');
+                void captionEl.offsetWidth;          // reflow
+                captionEl.classList.add('animate');
+            });
+        }
+
+        function showError(msg) {
+            errorEl.textContent = '⚠ ' + msg;
+            errorEl.style.display = 'block';
+            dot.classList.remove('visible');
+        }
+
+        function copyCaption() {
+            const text = captionEl.textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                copyBtn.textContent = 'Copied!';
+                setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1800);
+            });
+        }
+    </script>
+</body>
+
+</html>
